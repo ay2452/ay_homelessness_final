@@ -1,11 +1,8 @@
 ---
-output: html_document
-runtime: shiny
----
-----
 title: "Shiny Dashboard"
 output: 
   flexdashboard::flex_dashboard:
+    source_code: embed
     orientation: columns
     vertical_layout: fill
 runtime: shiny
@@ -34,7 +31,6 @@ Edu_Employ_09 =
   select(
     state, 
     total_employ, 
-    employ_ratio, 
     total_edu
   ) %>% 
   mutate(
@@ -59,7 +55,7 @@ Edu_Employ_17 =
     total_edu = hc01_est_vc43
     ) %>%
   select(
-    state, total_employ, employ_ratio, total_edu
+    state, total_employ, total_edu
   ) %>%
 mutate (
   year = 2017,
@@ -77,14 +73,32 @@ Edu_Employ_17 =
   
 Homelessness = 
   read.csv("./data/us_homelessness_07_18.csv") %>%
-  select(state, total_homeless, year)
+  select(state, year, total_homeless)
 ```
 
 ```{r}
-#Merging datasets
+#Merging datasets 
 Edu_Employ = rbind(Edu_Employ_09, Edu_Employ_17)
   
-HEE_merged = inner_join(Homelessness, Edu_Employ)
+HEE_merged = 
+  inner_join(Homelessness, Edu_Employ) %>%
+  mutate(
+    total_homeless = as.numeric(total_homeless), 
+    total_employ = as.numeric(total_employ), 
+    total_edu = as.numeric(total_edu)
+  ) %>%
+  pivot_longer(
+    total_homeless:total_edu,
+    names_to = "covariates",
+    values_to = "stats"
+  ) %>%
+  mutate(
+    covariates = case_when(
+      covariates == "total_homeless" ~ "Homeless",
+      covariates == "total_employ" ~"Employment",
+      covariates == "total_edu" ~ "Education"
+    )
+  )
 
 ```
 
@@ -93,10 +107,11 @@ Column {.sidebar}
 
 ```{r}
 #Creating years list
-years = 
+covariates = 
   HEE_merged %>%
-  distinct(year) %>%
+  distinct(covariates) %>%
   pull()
+
 
 #Creating input for years
 numericInput(
@@ -106,6 +121,13 @@ numericInput(
   max = 2017,
   value = 2017,
   step = 8
+  )
+
+radioButtons(
+  "covariates_type",
+  label = h4("Select covariate"),
+  choices = covariates,
+  selected = "Homeless"
   )
 ```
 
@@ -127,16 +149,16 @@ renderPlotly({
 
 HEE_merged %>% 
   mutate(state_name = openintro::abbr2state(state)) %>% 
-	filter(year == input[["year_choice"]]) %>% 
+	filter(year == input[["year_choice"]], covariates == input[["covariates_type"]]) %>% 
   plot_geo(locationmode = "USA-states") %>% 
 	add_trace(
-		z = ~total_homeless, ~total_employ, ~total_edu,
+		z = ~stats,
 		locations = ~state,
-		text = ~paste(total_employ, total_edu, state_name, sep = "\n"),
-		color = ~total_homeless,
+		text = ~paste(covariates, state_name, sep = "\n"),
+		color = ~stats,
 		colors = "Greens"
 		) %>%
-    colorbar(title = input[["variable_type"]]) %>%
+    colorbar(title = input[["covariates_type"]]) %>%
 	layout(
 		geo = geo1,
 		title = "Homelessness, Education, and Employment in the United States")
