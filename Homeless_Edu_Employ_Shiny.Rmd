@@ -1,0 +1,144 @@
+---
+output: html_document
+runtime: shiny
+---
+----
+title: "Shiny Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(shiny)
+library(flexdashboard)
+library(viridis)
+library(plotly)
+```
+
+````{r}
+#Loading and tidying datasets
+
+Edu_Employ_09 = 
+  read.csv("./data/2009_Edu_Employ.csv") %>%
+  janitor::clean_names() %>%
+  rename(
+    state = geo_display_label, 
+    total_employ = hc01_est_vc01, 
+    employ_ratio = hc03_est_vc01, 
+    total_edu = hc01_est_vc31
+    ) %>%
+  select(
+    state, 
+    total_employ, 
+    employ_ratio, 
+    total_edu
+  ) %>% 
+  mutate(
+    year = 2009, 
+    state = recode(state, "Arkansas" = "AK", "Alabama" = "AL", "Alaska" = "AK", "Arizona" = "AZ", "California" = "CA", "Colorado" = "CO", "Connecticut" = "CT", "Delaware" = "DE", "Florida" = "FL", "Georgia" = "GA", "Hawaii" = "HI", "Idaho" = "ID", "Illinois" = "ID", "Indiana" = "IN", "Iowa" = "IA", "Kansas" = "KS", "Kentucky" = "KY", "Louisiana" = "LA", "Maine" = "ME", "Maryland" = "MD", "Massachusetts" = "MA", "Michigan" = "MI", "Minnesota" = "MN", "Mississippi" = "MS", "Missouri" = "MO", "Montana" = "MT", "Nebraska" = "NE", "Nevada" = "NV", "New Hampshire" = "NH", "New Jersey" = "NJ", "New Mexico" = "NM", "New York" = "NY", "North Carolina" = "NC", "North Dakota" = "ND", "Ohio" = "OH", "Oklahoma" = "OK", "Oregon" = "OR", "Pennsylvania" = "PA", "Rhode Island" = "RI", "South Carolina" = "SC", "South Dakota" = "SD", "Tennessee" = "TN", "Texas" = "TX", "Utah" = "UT", "Vermont" = "VT", "Virginia" = "VA", "Washington" = "WA", "West Virginia" = "WV", "Wisconsin" = "WI", "Wyoming" = "WY"))
+  
+Edu_Employ_09 =   
+  Edu_Employ_09[-c(52),]
+
+Edu_Employ_09 = 
+  Edu_Employ_09[-c(9),]
+
+  
+
+Edu_Employ_17 = 
+  read.csv("./data/2017_Edu_Employ.csv") %>%
+  janitor::clean_names() %>%
+  rename(
+    state = geo_display_label, 
+    total_employ = hc01_est_vc01, 
+    employ_ratio = hc03_est_vc01, 
+    total_edu = hc01_est_vc43
+    ) %>%
+  select(
+    state, total_employ, employ_ratio, total_edu
+  ) %>%
+mutate (
+  year = 2017,
+  state = recode(state, "Arkansas" = "AK", "Alabama" = "AL", "Alaska" = "AK", "Arizona" = "AZ", "California" = "CA", "Colorado" = "CO", "Connecticut" = "CT", "Delaware" = "DE", "Florida" = "FL", "Georgia" = "GA", "Hawaii" = "HI", "Idaho" = "ID", "Illinois" = "ID", "Indiana" = "IN", "Iowa" = "IA", "Kansas" = "KS", "Kentucky" = "KY", "Louisiana" = "LA", "Maine" = "ME", "Maryland" = "MD", "Massachusetts" = "MA", "Michigan" = "MI", "Minnesota" = "MN", "Mississippi" = "MS", "Missouri" = "MO", "Montana" = "MT", "Nebraska" = "NE", "Nevada" = "NV", "New Hampshire" = "NH", "New Jersey" = "NJ", "New Mexico" = "NM", "New York" = "NY", "North Carolina" = "NC", "North Dakota" = "ND", "Ohio" = "OH", "Oklahoma" = "OK", "Oregon" = "OR", "Pennsylvania" = "PA", "Rhode Island" = "RI", "South Carolina" = "SC", "South Dakota" = "SD", "Tennessee" = "TN", "Texas" = "TX", "Utah" = "UT", "Vermont" = "VT", "Virginia" = "VA", "Washington" = "WA", "West Virginia" = "WV", "Wisconsin" = "WI", "Wyoming" = "WY"))
+
+Edu_Employ_17 = 
+  Edu_Employ_17 [-c(1),] 
+
+Edu_Employ_17 = 
+  Edu_Employ_17[-c(53),]
+
+Edu_Employ_17 = 
+  Edu_Employ_17[-c(10),]
+
+  
+Homelessness = 
+  read.csv("./data/us_homelessness_07_18.csv") %>%
+  select(state, total_homeless, year)
+```
+
+```{r}
+#Merging datasets
+Edu_Employ = rbind(Edu_Employ_09, Edu_Employ_17)
+  
+HEE_merged = inner_join(Homelessness, Edu_Employ)
+
+```
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+```{r}
+#Creating years list
+years = 
+  HEE_merged %>%
+  distinct(year) %>%
+  pull()
+
+#Creating input for years
+numericInput(
+  "year_choice",
+  label = h4("Select year (2009-2017)"),
+  min = 2009,
+  max = 2017,
+  value = 2017,
+  step = 8
+  )
+```
+
+Column {.tabset}
+-----------------------------------------------------------------------
+
+### Homelessness and Education and Employment in US by State
+
+```{r}
+##Creating interactive map
+
+renderPlotly({
+	geo1 = list(
+	  scope = "usa",
+	  projection = list(type = "albers usa"),
+	  lakecolor = toRGB("white")
+	)
+
+
+HEE_merged %>% 
+  mutate(state_name = openintro::abbr2state(state)) %>% 
+	filter(year == input[["year_choice"]]) %>% 
+  plot_geo(locationmode = "USA-states") %>% 
+	add_trace(
+		z = ~total_homeless, ~total_employ, ~total_edu,
+		locations = ~state,
+		text = ~paste(total_employ, total_edu, state_name, sep = "\n"),
+		color = ~total_homeless,
+		colors = "Greens"
+		) %>%
+    colorbar(title = input[["variable_type"]]) %>%
+	layout(
+		geo = geo1,
+		title = "Homelessness, Education, and Employment in the United States")
+})
+```
